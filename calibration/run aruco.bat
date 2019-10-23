@@ -1,0 +1,2 @@
+python aruco.py
+pause
