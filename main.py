@@ -109,6 +109,13 @@ class OpenGLGlyphs:
         # assign texture
         glEnable(GL_TEXTURE_2D)
         self.texture_background = glGenTextures(1)
+        
+        #Judge the static object position has been achieved.
+        self.idFind = False
+        self.idRVec, self.idTVec = None, None
+        self.corners = None
+        
+        
  
     def _draw_scene(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
@@ -116,7 +123,6 @@ class OpenGLGlyphs:
  
         # get image from camera.
         _, image = self.webcam.read()
-        cv2.waitKey(1)
         # image = imutils.resize(image,width=640)
  
         # convert image to OpenGL texture format
@@ -136,7 +142,7 @@ class OpenGLGlyphs:
         glBindTexture(GL_TEXTURE_2D, self.texture_background)
         glPushMatrix()
         glTranslatef(0.0,0.0,-10.0)
-        self._draw_background()
+        # self._draw_background()
         glPopMatrix()
  
         # handle glyphs
@@ -156,51 +162,58 @@ class OpenGLGlyphs:
 
 
         # aruco data
-        aruco_dict = aruco.Dictionary_get(aruco.DICT_7X7_250)      
+        aruco_dict = aruco.Dictionary_get(aruco.DICT_6X6_250)      
         parameters =  aruco.DetectorParameters_create()
 
         height, width, channels = image.shape
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters = parameters)
-        aruco.drawDetectedMarkers(image, corners)
-        if ids is not None and corners is not None: 
-            rvecs,tvecs ,_objpoints = aruco.estimatePoseSingleMarkers(corners[0], 0.05, self.cam_matrix, self.dist_coefs)    
-            for i in range(rvecs.shape[0]):
-                aruco.drawAxis(image, self.cam_matrix, self.dist_coefs, rvecs[i, :, :], tvecs[i, :, :], 0.08)
+        if not self.idFind:
+            if ids is not None and corners is not None: 
+                    rvecs,tvecs ,_objpoints = aruco.estimatePoseSingleMarkers(corners[0], 0.05, self.cam_matrix, self.dist_coefs)
+                    self.idRVec, self.idTVec = rvecs, tvecs
+                    self.corners = corners
+                    self.idFind = True
+        
+    
+        if self.idFind:
+            aruco.drawDetectedMarkers(image, self.corners)
+            for i in range(self.idRVec.shape[0]):
+                aruco.drawAxis(image, self.cam_matrix, self.dist_coefs, self.idRVec[i, :, :], self.idTVec[i, :, :], 0.08)
                 
             
             #build view matrix
             # board = aruco.GridBoard_create(6,8,0.05,0.01,aruco_dict)
             # corners, ids, rejectedImgPoints,rec_idx = aruco.refineDetectedMarkers(gray,board,corners,ids,rejectedImgPoints)
             # ret,rvecs,tvecs = aruco.estimatePoseBoard(corners,ids,board,self.cam_matrix,self.dist_coefs)
-            rmtx = cv2.Rodrigues(rvecs)[0]
-            view_matrix = np.array([[rmtx[0][0],rmtx[0][1],rmtx[0][2],tvecs[0][0][0]],
-                                    [rmtx[1][0],rmtx[1][1],rmtx[1][2],tvecs[0][0][1]],
-                                    [rmtx[2][0],rmtx[2][1],rmtx[2][2],tvecs[0][0][2]],
-                                    [0.0       ,0.0       ,0.0       ,1.0    ]])
-
-            # view_matrix = np.array([[rmtx[0][0],rmtx[0][1],rmtx[0][2],tvecs[0]],
-            #                         [rmtx[1][0],rmtx[1][1],rmtx[1][2],tvecs[1]],
-            #                         [rmtx[2][0],rmtx[2][1],rmtx[2][2],tvecs[2]],
+            # rmtx = cv2.Rodrigues(rvecs)[0]
+            # view_matrix = np.array([[rmtx[0][0],rmtx[0][1],rmtx[0][2],tvecs[0][0][0]],
+            #                         [rmtx[1][0],rmtx[1][1],rmtx[1][2],tvecs[0][0][1]],
+            #                         [rmtx[2][0],rmtx[2][1],rmtx[2][2],tvecs[0][0][2]],
             #                         [0.0       ,0.0       ,0.0       ,1.0    ]])
 
-            view_matrix = view_matrix * self.INVERSE_MATRIX
+            # # view_matrix = np.array([[rmtx[0][0],rmtx[0][1],rmtx[0][2],tvecs[0]],
+            # #                         [rmtx[1][0],rmtx[1][1],rmtx[1][2],tvecs[1]],
+            # #                         [rmtx[2][0],rmtx[2][1],rmtx[2][2],tvecs[2]],
+            # #                         [0.0       ,0.0       ,0.0       ,1.0    ]])
+
+            # view_matrix = view_matrix * self.INVERSE_MATRIX
  
-            view_matrix = np.transpose(view_matrix)
+            # view_matrix = np.transpose(view_matrix)
 
-            #Load project matrix
+            # #Load project matrix
             
             
-            # load view matrix and draw shape
-            # self._setProjectMatrix()
-            glPushMatrix()
-            glLoadMatrixd(view_matrix)
-            glScalef(0.06, 0.06, 0.06)
-            # glTranslate(0.5,0.5,0.5)
+            # # load view matrix and draw shape
+            # # self._setProjectMatrix()
+            # glPushMatrix()
+            # glLoadMatrixd(view_matrix)
+            # glScalef(0.06, 0.06, 0.06)
+            # # glTranslate(0.5,0.5,0.5)
 
-            glCallList(self.wolf.gl_list)
+            # glCallList(self.wolf.gl_list)
 
-            glPopMatrix()
+            # glPopMatrix()
         cv2.imshow("cv frame",image)
         cv2.waitKey(1)
         
@@ -220,8 +233,8 @@ class OpenGLGlyphs:
         # setup and run OpenGL
         glutInit()
         glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
-        glutInitWindowSize(640, 480)
-        glutInitWindowPosition(500, 400)
+        # glutInitWindowSize(640, 480)
+        # glutInitWindowPosition(500, 400)
         self.window_id = glutCreateWindow(b"Aruco Demo")
         glutDisplayFunc(self._draw_scene)
         glutIdleFunc(self._draw_scene)
