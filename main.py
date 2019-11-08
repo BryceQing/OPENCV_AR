@@ -65,6 +65,12 @@ class OpenGLGlyphs:
 
         print("getting data from file")
         self.cam_matrix,self.dist_coefs,rvecs,tvecs = self.get_cam_matrix()
+            
+        self.idFind = [False] * 10
+        self.idRvec = [None] * 10
+        self.idTVec = [None] * 10
+        self.corners = [None] * 10
+        
         
 
     def get_cam_matrix(self):
@@ -111,10 +117,11 @@ class OpenGLGlyphs:
         self.texture_background = glGenTextures(1)
         
         #Judge the static object position has been achieved.
-        self.idFind = False
-        self.idRVec, self.idTVec = None, None
-        self.corners = None
+        # self.idFind = False
+        # self.idRVec, self.idTVec = None, None
+        # self.corners = None
         
+    
         
  
     def _draw_scene(self):
@@ -168,18 +175,23 @@ class OpenGLGlyphs:
         height, width, channels = image.shape
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters = parameters)
-        if not self.idFind:
-            if ids is not None and corners is not None: 
-                    rvecs,tvecs ,_objpoints = aruco.estimatePoseSingleMarkers(corners[0], 0.05, self.cam_matrix, self.dist_coefs)
-                    self.idRVec, self.idTVec = rvecs, tvecs
-                    self.corners = corners
-                    self.idFind = True
-        
     
-        if self.idFind:
-            aruco.drawDetectedMarkers(image, self.corners)
-            for i in range(self.idRVec.shape[0]):
-                aruco.drawAxis(image, self.cam_matrix, self.dist_coefs, self.idRVec[i, :, :], self.idTVec[i, :, :], 0.08)
+    
+        if ids is not None and corners is not None:
+            for id in ids[0]:
+                if not self.idFind[id]:
+                    rvecs,tvecs ,_objpoints = aruco.estimatePoseSingleMarkers(corners[0], 0.05, self.cam_matrix, self.dist_coefs)
+                    self.idFind[id] = True
+                    self.idRvec[id] = rvecs
+                    self.idTVec[id] = tvecs
+                    self.corners[id] = corners
+                    
+        idIndex = [index for index, value in enumerate(self.idFind) if value is True]
+    
+        for id in idIndex:
+            aruco.drawDetectedMarkers(image, self.corners[id])
+            for i in range(self.idRvec[id].shape[0]):
+                aruco.drawAxis(image, self.cam_matrix, self.dist_coefs, self.idRvec[id][i, :, :], self.idTVec[id][i, :, :], 0.08)
                 
             
             #build view matrix
