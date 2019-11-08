@@ -14,7 +14,7 @@ This is file loads and displays the 3d model on OpenGL screen.
 """
 
 
-def getGLM(RVEC, TVEC):
+def extrinsic2ModelView(RVEC, TVEC):
     """[Get modelview matrix from RVEC and TVEC]
     
     Arguments:
@@ -22,17 +22,71 @@ def getGLM(RVEC, TVEC):
         TVEC {[vector]} -- [Translation vector]
     """
     R, _ = cv2.Rodrigues(RVEC)
-    # print(f'Debug \n R {R} \n  T {TVEC}\n')
-    Rt = np.hstack((R, TVEC))
     Rx = np.array([
         [1, 0, 0],
         [0, -1, 0],
         [0, 0, -1]
     ])
-    M = np.eye(4)
-    M[:3, :] = Rx @ Rt
-    m = M.T
+    
+    TVEC = TVEC.flatten().reshape((3, 1))
+    # print('Debug TVEC', TVEC)
+    rv = Rx @ R
+    rt = Rx @ TVEC
+    
+    m = [0.0] * 16
+    m[0] = rv[0, 0]
+    m[1] = rv[1, 0]
+    m[2] = rv[2, 0]
+    m[3] = 0.0
+    
+    m[4] = rv[0, 1]
+    m[5] = rv[1, 1]
+    m[6] = rv[2, 1]
+    m[7] = 0.0
+    
+    m[8] = rv[0, 2]
+    m[9] = rv[1, 2]
+    m[10] = rv[2, 2]
+    m[11] = 0.0
+    
+    
+    # print('Debug rt', rt.shape)
+    
+    m[12] = rt[0, 0]
+    m[13] = rt[1, 0]
+    m[14] = rt[2, 0]
+    m[15] = 1.0
+    
     return m
+
+
+def intrinsic2Project(MTX, width, height, near_plane = 0.01, far_plane = 100.0):
+    """[Get Projection]
+
+    Arguments:
+        width {[int]} -- [The width of viewport]
+        height {[int]} -- [The height of viewport]
+        MTX {[array]} -- [The internal reference of camera]
+    """
+    
+    
+    P = np.zeros(shape = (4, 4), dtype = np.float32)
+    fx, fy = MTX[0, 0], MTX[1, 1]
+    cx, cy = MTX[0, 2], MTX[1, 2]
+    
+    
+    P[0, 0] = 2 * fx / width
+    P[1, 1] = 2 * fy / height
+    P[2, 0] = 1 - 2 * cx / width
+    P[2, 1] = 2 * cy / height - 1
+    P[2, 2] = -( far_plane + near_plane) / (far_plane - near_plane)
+    P[2, 3] = -1.0
+    P[3, 2] = - ( 2 * far_plane * near_plane) / (far_plane - near_plane)
+    
+    return P.flatten()
+
+
+
  
  
 class OpenGLGlyphs:
@@ -78,14 +132,12 @@ class OpenGLGlyphs:
         glEnable(GL_DEPTH_TEST)
         
         
-        glMatrixMode(GL_PROJECTION)
-        glLoadIdentity()
-        gluPerspective(33.7, 1.3, 0.1, 100.0)
-        glMatrixMode(GL_MODELVIEW)
+       
+        
         
         # Load 3d object    
 
-        File = 'cone.obj'
+        File = 'box.obj'
         self.wolf = OBJ(File,swapyz=True)
         # assign texture
         glEnable(GL_TEXTURE_2D)
@@ -102,8 +154,14 @@ class OpenGLGlyphs:
  
     def _draw_scene(self):
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
+        
+        glMatrixMode(GL_PROJECTION)
         glLoadIdentity()
- 
+        gluPerspective(33.7, 1.3, 0.1, 100.0)
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+        
+   
         # get image from webcam
          # get image from camera.
         _, image = self.webcam.read()
@@ -132,11 +190,15 @@ class OpenGLGlyphs:
         image = self._handle_glyphs(image)
  
         glutSwapBuffers()
+        # cv2.imshow('image', image)
+        cv2.waitKey(20)
         
  
     def _handle_glyphs(self, image):
 
-
+        glClear(GL_DEPTH_BUFFER_BIT)
+        
+        
         # aruco data
         aruco_dict = aruco.Dictionary_get(aruco.DICT_6X6_250)      
         parameters =  aruco.DetectorParameters_create()
@@ -151,34 +213,43 @@ class OpenGLGlyphs:
             rvecs, tvecs, _= aruco.estimatePoseSingleMarkers(corners, 0.07, self.cam_matrix, self.dist_coefs)
             for i in range(rvecs.shape[0]):
                 aruco.drawAxis(image, self.cam_matrix, self.dist_coefs, rvecs[i, :, :], tvecs[i, :, :], 0.03)
-            try:
-        
-                rmtx = cv2.Rodrigues(rvecs)[0]
-
-                view_matrix = np.array([[rmtx[0][0],rmtx[0][1],rmtx[0][2],tvecs[0][0][0]],
-                                    [rmtx[1][0],rmtx[1][1],rmtx[1][2],tvecs[0][0][1]],
-                                    [rmtx[2][0],rmtx[2][1],rmtx[2][2],tvecs[0][0][2]],
-                                    [0.0       ,0.0       ,0.0       ,1.0    ]])
-
-        
-                view_matrix = view_matrix * self.INVERSE_MATRIX
-                view_matrix = np.transpose(view_matrix)
+            # try:
                 
+                
+                projectMatrix = intrinsic2Project(self.cam_matrix, width, height, 0.01, 100.0)
+                glMatrixMode(GL_PROJECTION)
+                
+                
+                reflect = [
+                    1, 0, 0, 0,
+                    0, 1, 0, 0,
+                    0, 0, 1, 0,
+                    0, 0, 0, 1
+                ]
+                
+                glLoadMatrixf(reflect)
+                glMultMatrixf(projectMatrix)
+
+
                 glMatrixMode(GL_MODELVIEW)
-                glLoadMatrixd( view_matrix)
-                x, y, z = tvecs[0][0]
-                # print(x, y, z)
-                glTranslated(-0.02, -0.13, 0)
+                glLoadIdentity()
+                
+                
+                model_matrix = extrinsic2ModelView(rvecs, tvecs)
+                
+                glLoadMatrixf(model_matrix)
+                # x, y, z = tvecs[0][0]
+                # # print(x, y, z)
+                # glTranslated(-0.02, -0.13, 0)
                 glScaled(0.03, 0.03, 0.03)
- 
-        
                 glCallList(self.wolf.gl_list)
-                glPopMatrix()
-            except:
-                pass
+                
+            # except:
+            #     print('error')
+            #     pass
 
         cv2.imshow("cv frame",image)
-        cv2.waitKey(1)
+        
         
 
     def _draw_background(self):
@@ -188,6 +259,7 @@ class OpenGLGlyphs:
         glTexCoord2f(1.0, 1.0); glVertex3f( 4.0, -3.0, 0.0)
         glTexCoord2f(1.0, 0.0); glVertex3f( 4.0,  3.0, 0.0)
         glTexCoord2f(0.0, 0.0); glVertex3f(-4.0,  3.0, 0.0)
+       
         glEnd( )
 
 
@@ -197,7 +269,7 @@ class OpenGLGlyphs:
         glutInit()
         glutInitDisplayMode(GLUT_RGBA | GLUT_DOUBLE | GLUT_DEPTH)
         glutInitWindowSize(640, 480)
-        glutInitWindowPosition(500, 400)
+        glutInitWindowPosition(500, 500)
         self.window_id = glutCreateWindow(b"Aruco Demo")
         glutDisplayFunc(self._draw_scene)
         glutIdleFunc(self._draw_scene)
