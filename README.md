@@ -30,11 +30,11 @@
   - **If you like it please give me a star and fork it :) :)**
   
 - ## Demo Video
-  [Youtube Video](https://www.youtube.com/watch?v=WT740R5RAMo)
-  [iqiyi Video](http://www.iqiyi.com/w_19sb1h12f1.html)
+  - [Youtube Video](https://www.youtube.com/watch?v=WT740R5RAMo)
+  - [iqiyi Video](http://www.iqiyi.com/w_19sb1h12f1.html)
 
 ## References
- > https://github.com/ajaymin28/Aruco_python
- > https://github.com/ygx2011/Marker_AR
- > https://github.com/GeekLiB/AR-BXT-AR4Python
- > https://github.com/RaubCamaioni/OpenCV_Position
+  > https://github.com/ajaymin28/-Aruco_python  
+  > https://github.com/ygx2011/Marker_AR  
+  > https://github.com/GeekLiB/AR-BXT-AR4Python  
+  > https://github.com/RaubCamaioni/OpenCV_Position
