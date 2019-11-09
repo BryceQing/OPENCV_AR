@@ -1,7 +1,7 @@
 import pygame
 from OpenGL.GL import *
 
-
+# FIXME There is some problem about textures and materials.
 def MTL(dir, filename):
     contents = {}
     mtl = None
@@ -31,6 +31,7 @@ def MTL(dir, filename):
             mtl[values[0]] = list(map(float, values[1:]))
     return contents
 
+# TODO load more format models
 class OBJ:
     def __init__(self, filename, swapyz=False):
         
