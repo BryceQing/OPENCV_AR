@@ -1,10 +1,11 @@
 import pygame
 from OpenGL.GL import *
 
-def MTL(filename):
+
+def MTL(dir, filename):
     contents = {}
     mtl = None
-    for line in open(filename, "r"):
+    for line in open(dir + filename, "r"):
         if line.startswith('#'): continue
         values = line.split()
         if not values: continue
@@ -15,7 +16,7 @@ def MTL(filename):
         elif values[0] == 'map_Kd':
             # load the texture referred to by this declaration
             mtl[values[0]] = list(map(str, values[1:]))
-            surf = pygame.image.load(values[1])
+            surf = pygame.image.load(dir + values[1])
             image = pygame.image.tostring(surf, 'RGBA', 1)
             ix, iy = surf.get_rect().size
             texid = mtl['texture_Kd'] = glGenTextures(1)
@@ -32,6 +33,9 @@ def MTL(filename):
 
 class OBJ:
     def __init__(self, filename, swapyz=False):
+        
+        self.dir = filename[: filename.rfind('/') + 1]        
+        
         """Loads a Wavefront OBJ file. """
         self.vertices = []
         self.normals = []
@@ -58,7 +62,7 @@ class OBJ:
             elif values[0] in ('usemtl', 'usemat'):
                 material = values[1]
             elif values[0] == 'mtllib':
-                self.mtl = MTL(values[1])
+                self.mtl = MTL(self.dir, values[1])
             elif values[0] == 'f':
                 face = []
                 texcoords = []
