@@ -1,0 +1,15 @@
+# Blender v2.80 (sub 75) OBJ File: 'square.blend'
+# www.blender.org
+mtllib square.mtl
+o Cube
+v 1.000000 1.000000 0.000000
+v 1.000000 -1.000000 0.000000
+v -1.000000 1.000000 0.000000
+v -1.000000 -1.000000 0.000000
+vt 0 0
+vt 0 1
+vt 1 1
+vt 1 0
+vn 0.0000 0.0000 1.0000
+usemtl Material
+f 4/1/1 3/2/1 1/3/1 2/4/1

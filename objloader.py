@@ -1,7 +1,6 @@
 import pygame
 from OpenGL.GL import *
 
-# FIXME There is some problem about textures and materials.
 def MTL(dir, filename):
     contents = {}
     mtl = None
@@ -12,14 +11,16 @@ def MTL(dir, filename):
         if values[0] == 'newmtl':
             mtl = contents[values[1]] = {}
         elif mtl is None:
-            raise ValueError("mtl file doesn't start with newmtl stmt")
+            raise (ValueError, "mtl file doesn't start with newmtl stmt")
         elif values[0] == 'map_Kd':
             # load the texture referred to by this declaration
-            mtl[values[0]] = list(map(str, values[1:]))
-            surf = pygame.image.load(dir + values[1])
+            mtl[values[0]] = dir + values[1]
+            surf = pygame.image.load(mtl['map_Kd'])
             image = pygame.image.tostring(surf, 'RGBA', 1)
             ix, iy = surf.get_rect().size
             texid = mtl['texture_Kd'] = glGenTextures(1)
+            # print('texid', texid)
+            # texid = 10
             glBindTexture(GL_TEXTURE_2D, texid)
             glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER,
                 GL_LINEAR)
@@ -62,6 +63,7 @@ class OBJ:
                 self.texcoords.append(list(map(float, values[1:3])))
             elif values[0] in ('usemtl', 'usemat'):
                 material = values[1]
+                # print('debug values', values[1])
             elif values[0] == 'mtllib':
                 self.mtl = MTL(self.dir, values[1])
             elif values[0] == 'f':
@@ -83,27 +85,23 @@ class OBJ:
 
         self.gl_list = glGenLists(1)
         glNewList(self.gl_list, GL_COMPILE)
-        # glEnable(GL_TEXTURE_2D)
         glFrontFace(GL_CCW)
         for face in self.faces:
             vertices, normals, texture_coords, material = face
-
             mtl = self.mtl[material]
             if 'texture_Kd' in mtl:
                 # use diffuse texmap
                 glBindTexture(GL_TEXTURE_2D, mtl['texture_Kd'])
             else:
                 # just use diffuse colour
-                glColor(*mtl['Kd'])
-
-            glBegin(GL_POLYGON)
-            
+                glColor3f(*mtl['Kd'])
+            glBegin(GL_POLYGON)            
             for i in range(len(vertices)):
                 if normals[i] > 0:
                     glNormal3fv(self.normals[normals[i] - 1])
-                if texture_coords[i] > 0:
+                if texture_coords[i] > 0 and 'texture_Kd' in mtl:
                     glTexCoord2fv(self.texcoords[texture_coords[i] - 1])
                 glVertex3fv(self.vertices[vertices[i] - 1])
             glEnd()
-        # glDisable(GL_TEXTURE_2D)
+        glColor3f(1.0,1.0,1.0) # Clear the painting color.
         glEndList()
