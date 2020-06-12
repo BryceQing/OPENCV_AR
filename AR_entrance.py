@@ -12,7 +12,7 @@ import sys
 from tools.Visualize import draw_axis
 from objloader import * #Load obj and corresponding material and textures.
 from MatrixTransform import extrinsic2ModelView, intrinsic2Project 
-
+from Filter import Filter
 
 
 class AR_render:
@@ -40,7 +40,9 @@ class AR_render:
         
         # Model translate that you can adjust by key board 'w', 's', 'a', 'd'
         self.translate_x, self.translate_y, self.translate_z = 0, 0, 0
+        self.pre_extrinsicMatrix = None
         
+        self.filter = Filter()
         
 
     def loadModel(self, object_path):
@@ -85,15 +87,15 @@ class AR_render:
         glDepthFunc(GL_LESS)
         glEnable(GL_DEPTH_TEST)
         
-        # Assign texture
+        # # Assign texture
         glEnable(GL_TEXTURE_2D)
-        self.texture_background = glGenTextures(1)
         
         # Add listener
         glutKeyboardFunc(self.keyBoardListener)
         
         # Set ambient lighting
-        glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.5, 0.5, 0.5, 1.0)) 
+        glLightfv(GL_LIGHT0, GL_DIFFUSE, (0.5,0.5,0.5,1)) 
+        
         
         
         
@@ -116,7 +118,6 @@ class AR_render:
  
  
  
-    # FIXME I think draw background shoule be fixed, but it can work well now.
     def draw_background(self, image):
         """[Draw the background and tranform to opengl format]
         
@@ -145,7 +146,6 @@ class AR_render:
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST)
         glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST)
         glTexImage2D(GL_TEXTURE_2D, 0, 3, ix, iy, 0, GL_RGBA, GL_UNSIGNED_BYTE, bg_image)
-        
                 
         glTranslatef(0.0,0.0,-10.0)
         glBegin(GL_QUADS)
@@ -155,10 +155,11 @@ class AR_render:
         glTexCoord2f(0.0, 0.0); glVertex3f(-4.0,  3.0, 0.0)
         glEnd()
 
+        glBindTexture(GL_TEXTURE_2D, 0)
  
  
  
-    def draw_objects(self, image, mark_size = 0.07):
+    def draw_objects(self, image, mark_size = 0.05):
         """[draw models with opengl]
         
         Arguments:
@@ -168,7 +169,6 @@ class AR_render:
             mark_size {float} -- [aruco mark size: unit is meter] (default: {0.07})
         """
         # aruco data
-        
         aruco_dict = aruco.Dictionary_get(aruco.DICT_6X6_250)      
         parameters =  aruco.DetectorParameters_create()
         parameters.adaptiveThreshConstant = True
@@ -176,35 +176,44 @@ class AR_render:
         height, width, channels = image.shape
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
         corners, ids, rejectedImgPoints = aruco.detectMarkers(gray, aruco_dict, parameters = parameters)
-
+        
+        rvecs, tvecs, model_matrix = None, None, None
         
         if ids is not None and corners is not None:
             rvecs, tvecs, _= aruco.estimatePoseSingleMarkers(corners, mark_size , self.cam_matrix, self.dist_coefs)
             new_rvecs = rvecs[0,:,:]
             new_tvecs = tvecs[0,:,:]
             test = draw_axis(image, new_rvecs, new_tvecs, self.cam_matrix, self.dist_coefs)
-            cv2.imshow('Test image', test)
             # for i in range(rvecs.shape[0]):
             #     aruco.drawAxis(image, self.cam_matrix, self.dist_coefs, rvecs[i, :, :], tvecs[i, :, :], 0.03)
-            try:     
-                projectMatrix = intrinsic2Project(self.cam_matrix, width, height, 0.01, 100.0)
-                glMatrixMode(GL_PROJECTION)
-                glLoadIdentity()
-                glMultMatrixf(projectMatrix)
-
-                glMatrixMode(GL_MODELVIEW)
-                glLoadIdentity()
-                model_matrix = extrinsic2ModelView(rvecs, tvecs)
-                glLoadMatrixf(model_matrix)
-                glScaled(self.model_scale, self.model_scale, self.model_scale)
-                glTranslatef(self.translate_x, self.translate_y, self.translate_y)
-                glCallList(self.model.gl_list)
-                
-            except err:
-                print('Err:', err)
-                
-        cv2.imshow("Frame",image)
+            
+        projectMatrix = intrinsic2Project(self.cam_matrix, width, height, 0.01, 100.0)
+        glMatrixMode(GL_PROJECTION)
+        glLoadIdentity()
+        glMultMatrixf(projectMatrix)
         
+        glMatrixMode(GL_MODELVIEW)
+        glLoadIdentity()
+       
+        
+        if tvecs is not None:
+            if self.filter.update(tvecs): # the mark is moving
+                model_matrix = extrinsic2ModelView(rvecs, tvecs)
+            else:
+                model_matrix = self.pre_extrinsicMatrix
+        else:
+            model_matrix =  self.pre_extrinsicMatrix
+        
+            
+        if model_matrix is not None:     
+            self.pre_extrinsicMatrix = model_matrix
+            glLoadMatrixf(model_matrix)
+            glScaled(self.model_scale, self.model_scale, self.model_scale)
+            glTranslatef(self.translate_x, self.translate_y, self.translate_y)
+            glCallList(self.model.gl_list)
+            
+        cv2.imshow("Frame",image)
+        cv2.waitKey(20)
         
 
     def keyBoardListener(self, key, x, y):
@@ -237,21 +246,13 @@ class AR_render:
 
 if __name__ == "__main__":
     # The value of cam_matrix and dist_coeff from your calibration by using chessboard.
-    cam_matrix = np.array([ 
-                    [968.40, 0.00, 224.52],
-                    [0.00, 964.64, 86.44],
-                    [0.00, 0.00, 1.00]
-                ])
-    # cam_matrix = np.array([
-    #     [1285.91, 0.00, 636.51], 
-    #     [0.00, 1254.80, 669.19],
-    #     [0.00, 0.00, 1.00], 
-    # ])
+    cam_matrix = np.array([
+         [544.91, 0.00, 316.75],
+         [0.00, 606.31, 261.07],
+         [0.00, 0.00, 1.00],
+    ])
 
-    # dist_coeff = np.array([-0.50473126, 0.79121745, 0.01319739, 0.0116239, -1.16359485]) 
-    dist_coeff = np.array([0.49921041, -2.2731793, -0.01392174, 0.01677649, 3.99742617])    
-    ar_instance = AR_render(cam_matrix, dist_coeff, './Models/Car/sedan_body.obj', model_scale = 0.001)
-    # ar_instance = AR_render(cam_matrix, dist_coeff, './Models/Monster/Sinbad_4_000001.obj', model_scale = 0.03)
-    # ar_instance = AR_render(cam_matrix, dist_coeff, './Models/Sphere/sphere.obj', model_scale = 0.03)
-    # ar_instance = AR_render(cam_matrix, dist_coeff, './Models/Iphone/IPhone4.obj', model_scale = 0.02)
+    # dist_coeff = np.array([0.49921041, -2.2731793, -0.01392174, 0.01677649, 3.99742617])    
+    dist_coeff = np.array([ 2.84542709e-01,-1.92052859e+00,1.35772811e-05,-7.62765800e-04,4.00245238e+00]) 
+    ar_instance = AR_render(cam_matrix, dist_coeff, './Models/plastic_cup/Plastic_Cup.obj', model_scale = 0.03)
     ar_instance.run() 
