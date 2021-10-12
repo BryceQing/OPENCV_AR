@@ -1,5 +1,5 @@
 glob2==0.6
 opencv-contrib-python==4.1.1.26
-opencv-python==4.1.1.26
+opencv-python==4.2.0.32
 numpy==1.16.5
 Pillow==6.2.0
